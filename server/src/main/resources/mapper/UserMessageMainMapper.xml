@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="pers.xiaolin.mapper.UserMessageMainMapper">
+
+    <select id="getUserMessageMain" resultType="pers.xiaolin.entity.UserMessageMain">
+        select id, sender_id, receiver_id, message_count
+        from user_message_main
+        where sender_id = #{senderId} and receiver_id = #{receiverId}
+    </select>
+
+    <select id="getMessageMainList" resultType="pers.xiaolin.vo.UserMessageMainVO">
+        SELECT
+        CASE WHEN m1.sender_id = #{userId} THEN m1.sender_id ELSE m1.receiver_id END as "senderId",
+        CASE WHEN m1.sender_id = #{userId} THEN s.username ELSE r.username END as "senderName",
+        CASE WHEN m1.sender_id = #{userId} THEN m1.receiver_id ELSE m1.sender_id END as "receiverId",
+        CASE WHEN m1.sender_id = #{userId} THEN r.username ELSE s.username END as "receiverName",
+        m1.create_time as "endSendTime",
+        (SELECT message_count FROM user_message_main WHERE sender_id = m1.receiver_id AND receiver_id = m1.sender_id) as "messageCount"
+        FROM user_message_main m1
+        INNER JOIN user s ON s.id = m1.sender_id
+        INNER JOIN user r ON r.id = m1.receiver_id
+        WHERE m1.id IN (
+                SELECT MAX(id)
+                FROM user_message_main
+                WHERE sender_id = #{userId} OR receiver_id = #{userId}
+                GROUP BY
+                    LEAST(sender_id, receiver_id),
+                    GREATEST(sender_id, receiver_id)
+            )
+        ORDER BY endSendTime DESC
+    </select>
+
+    <select id="getMessageMainList1" resultType="pers.xiaolin.vo.UserMessageMainVO">
+        select sender_id, sender.username "senderName", receiver_id, receiver.username "receiverName", 0 as "messageCount", update_time as "endSendTime"
+        from user_message_main umm
+        left join user sender on sender.id = umm.sender_id
+        left join user receiver on receiver.id = umm.receiver_id
+        where umm.sender_id = #{senderId}
+    </select>
+    <select id="getMessageMainList2" resultType="pers.xiaolin.vo.UserMessageMainVO">
+        select sender_id, sender.username "senderName", receiver_id, receiver.username "receiverName", message_count, update_time as "endSendTime"
+        from user_message_main umm
+        left join user sender on sender.id = umm.sender_id
+        left join user receiver on receiver.id = umm.receiver_id
+        where umm.receiver_id = #{receiverId}
+    </select>
+</mapper>

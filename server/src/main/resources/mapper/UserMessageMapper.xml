@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="pers.xiaolin.mapper.UserMessageMapper">
+    <select id="getUserMessageList" resultType="pers.xiaolin.vo.UserMessageVO">
+        select content, sender_id, receiver_id, create_time "sendTime"
+        from user_message
+        where receiver_id = #{receiverId} and sender_id = #{senderId}
+            or receiver_id = #{senderId} and sender_id = #{receiverId}
+        order by create_time desc
+    </select>
+</mapper>

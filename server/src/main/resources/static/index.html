@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天系统</title>
+    <!-- 引入 Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- 引入 Element Plus -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/element-plus"></script>
+    <!-- 引入 Element Plus 图标 -->
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .container {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f5f7fa;
+        }
+        .login-card {
+            width: 400px;
+        }
+        .chat-container {
+            height: 100vh;
+            display: flex;
+            background-color: #f5f7fa;
+        }
+        .chat-sidebar {
+            width: 300px;
+            background-color: #fff;
+            border-right: 1px solid #e4e7ed;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #fff;
+        }
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid #e4e7ed;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid #e4e7ed;
+        }
+        .message-item {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        .message-time {
+            font-size: 12px;
+            color: #909399;
+            margin-top: 5px;
+        }
+        .message-sent {
+            align-items: flex-end;
+        }
+        .message-sent .message-content {
+            background-color: #409eff;
+            color: #fff;
+        }
+        .message-received {
+            align-items: flex-start;
+        }
+        .message-received .message-content {
+            background-color: #f4f4f5;
+            color: #303133;
+        }
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        .chat-list-item {
+            padding: 15px;
+            border-bottom: 1px solid #e4e7ed;
+            cursor: pointer;
+        }
+        .chat-list-item:hover {
+            background-color: #f5f7fa;
+        }
+        .chat-list-item.active {
+            background-color: #ecf5ff;
+        }
+        .search-box {
+            padding: 15px;
+            border-bottom: 1px solid #e4e7ed;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 登录界面 -->
+        <div v-if="!isLoggedIn" class="container">
+            <el-card class="login-card">
+                <template #header>
+                    <h2>聊天系统登录</h2>
+                </template>
+                <el-form :model="loginForm" :rules="loginRules" ref="loginFormRef">
+                    <el-form-item prop="username">
+                        <el-input v-model="loginForm.username" placeholder="用户名">
+                            <template #prefix>
+                                <el-icon><User /></el-icon>
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item prop="password">
+                        <el-input v-model="loginForm.password" type="password" placeholder="密码">
+                            <template #prefix>
+                                <el-icon><Lock /></el-icon>
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" @click="handleLogin" :loading="loading" style="width: 100%">
+                            登录
+                        </el-button>
+                    </el-form-item>
+                </el-form>
+            </el-card>
+        </div>
+
+        <!-- 聊天界面 -->
+        <div v-else class="chat-container">
+            <!-- 左侧聊天列表 -->
+            <div class="chat-sidebar">
+                <div class="search-box">
+                    <el-input v-model="searchUser" placeholder="搜索用户" clearable>
+                        <template #prefix>
+                            <el-icon><Search /></el-icon>
+                        </template>
+                    </el-input>
+                </div>
+                <div class="chat-list">
+                    <div v-for="chat in filteredUsers" 
+                         :key="chat.id" 
+                         class="chat-list-item"
+                         :class="{ active: currentChat && currentChat.id === chat.id }"
+                         @click="selectChat(chat)">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>{{ chat.senderId === userId ? chat.receiverName : chat.senderName }}</span>
+                            <el-badge v-if="chat.messageCount > 0" :value="chat.messageCount" type="danger" />
+                        </div>
+                        <div style="font-size: 12px; color: #909399; margin-top: 5px;">
+                            {{ chat.endSendTime || '暂无消息' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧聊天区域 -->
+            <div class="chat-main">
+                <div v-if="currentChat" class="chat-header">
+                    <span>{{ currentChat.senderId === userId ? currentChat.receiverName : currentChat.senderName }}</span>
+                    <el-button type="text" @click="handleLogout">退出登录</el-button>
+                </div>
+                <div v-if="currentChat" class="chat-messages" ref="messageContainer">
+                    <div v-for="message in messages" 
+                         :key="message.id" 
+                         class="message-item"
+                         :class="message.senderId === userId ? 'message-sent' : 'message-received'">
+                        <div class="message-content">
+                            {{ message.content }}
+                            <el-dropdown v-if="message.senderId === userId && canRecall(message)" trigger="click" @command="(command) => handleRecall(message, command)">
+                                <el-button type="text" style="padding: 0 5px;">
+                                    <el-icon><More /></el-icon>
+                                </el-button>
+                                <template #dropdown>
+                                    <el-dropdown-menu>
+                                        <el-dropdown-item command="recall">撤回</el-dropdown-item>
+                                    </el-dropdown-menu>
+                                </template>
+                            </el-dropdown>
+                        </div>
+                        <div class="message-time">{{ formatTime(message.sendTime) }}</div>
+                    </div>
+                </div>
+
+                <el-button type="primary" @click="sendMessage">
+                    发送
+                </el-button>
+
+                <div class="chat-input">
+                    <el-input
+                        v-model="messageContent"
+                        type="textarea"
+                        :rows="3"
+                        placeholder="请输入消息"
+                        @keyup.enter.ctrl="sendMessage"
+                    />
+<!--                    <div style="margin-top: 10px; text-align: right;">-->
+<!--                        <el-button type="primary" @click="sendMessage">-->
+<!--                            发送-->
+<!--                        </el-button>-->
+<!--                    </div>-->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, nextTick } = Vue
+        const { ElMessage } = ElementPlus
+
+        const app = createApp({
+            setup() {
+                // 登录相关
+                const isLoggedIn = ref(false)
+                const loginForm = ref({
+                    username: '',
+                    password: ''
+                })
+                const loginRules = {
+                    username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+                    password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+                }
+                const loading = ref(false)
+                const userId = ref('')
+                const token = ref('')
+                const ws = ref(null)
+
+                // 聊天相关
+                const currentChat = ref(null)
+                const messages = ref([])
+                const messageContent = ref('')
+                const searchUser = ref('')
+                const users = ref([])
+                const messageContainer = ref(null)
+
+                // 过滤用户列表
+                const filteredUsers = computed(() => {
+                    if (!searchUser.value) return users.value
+                    return users.value.filter(user => 
+                        user.username.toLowerCase().includes(searchUser.value.toLowerCase())
+                    )
+                })
+
+                // 重连机制
+                const reconnectCount = ref(0)
+                const maxReconnectAttempts = 5
+                const reconnectDelay = 3000 // 3秒
+
+                // 初始化WebSocket连接
+                const initWebSocket = () => {
+                    const wsUrl = `ws://${window.location.host}/ws/chat/${userId.value}`
+                    console.log('正在连接WebSocket:', wsUrl)
+                    ws.value = new WebSocket(wsUrl)
+
+                    ws.value.onopen = () => {
+                        console.log('WebSocket连接已建立')
+                        // 重置重连次数
+                        reconnectCount.value = 0
+                    }
+
+                    ws.value.onmessage = (event) => {
+                        console.log('收到WebSocket消息:', event.data)
+                        try {
+                            const data = JSON.parse(event.data)
+                            const message = {
+                                id: data.messageId,
+                                content: data.content,
+                                senderId: data.senderId,
+                                sendTime: new Date(parseInt(data.time))
+                            }
+                            console.log('解析后的消息:', message)
+                            messages.value.push(message)
+                            scrollToBottom()
+                            // 更新未读消息数
+                            updateUnreadCount(data.senderId)
+                        } catch (error) {
+                            console.error('处理WebSocket消息失败:', error)
+                        }
+                    }
+
+                    ws.value.onerror = (error) => {
+                        console.error('WebSocket错误:', error)
+                        ElMessage.error('WebSocket连接错误')
+                    }
+
+                    ws.value.onclose = () => {
+                        console.log('WebSocket连接已关闭')
+                        // 尝试重连
+                        reconnectWebSocket()
+                    }
+                }
+
+                // 重连机制
+                const reconnectWebSocket = () => {
+                    if (reconnectCount.value < maxReconnectAttempts) {
+                        reconnectCount.value++
+                        console.log(`尝试重连 (${reconnectCount.value}/${maxReconnectAttempts})...`)
+                        setTimeout(() => {
+                            initWebSocket()
+                        }, reconnectDelay)
+                    } else {
+                        console.log('达到最大重连次数，停止重连')
+                        ElMessage.error('WebSocket连接失败，请刷新页面重试')
+                    }
+                }
+
+                // 检查WebSocket连接状态
+                const checkWebSocketConnection = () => {
+                    if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
+                        ElMessage.warning('WebSocket连接已断开，正在尝试重连...')
+                        reconnectWebSocket()
+                        return false
+                    }
+                    return true
+                }
+
+                // 登录处理
+                const handleLogin = async () => {
+                    if (!loginForm.value.username || !loginForm.value.password) {
+                        ElMessage.warning('请输入用户名和密码')
+                        return
+                    }
+
+                    loading.value = true
+                    try {
+                        const response = await fetch('/user/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(loginForm.value)
+                        })
+                        
+                        const data = await response.json()
+                        
+                        if (data.code === 1 && data.data && data.data.token) {
+                            token.value = data.data.token
+                            userId.value = data.data.id
+                            localStorage.setItem('token', data.data.token)
+                            localStorage.setItem('userId', data.data.id)
+                            isLoggedIn.value = true
+                            ElMessage.success('登录成功')
+                            initWebSocket()
+                            loadChatList()
+                        } else {
+                            ElMessage.error(data.msg || '登录失败')
+                        }
+                    } catch (error) {
+                        console.error('登录错误:', error)
+                        ElMessage.error('登录失败，请检查网络连接')
+                    } finally {
+                        loading.value = false
+                    }
+                }
+
+                // 加载聊天列表
+                const loadChatList = async () => {
+                    try {
+                        const response = await fetch('/user-message-main/list', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `${token.value}`
+                            }
+                        })
+                        const data = await response.json()
+                        if (data.code === 1) {
+                            users.value = data.data
+                            // 如果有聊天列表，自动选择第一个聊天
+                            if (users.value.length > 0 && !currentChat.value) {
+                                selectChat(users.value[0])
+                            }
+                        }
+                    } catch (error) {
+                        console.error('加载聊天列表失败:', error)
+                        ElMessage.error('加载聊天列表失败')
+                    }
+                }
+
+                // 选择聊天
+                const selectChat = async (chat) => {
+                    console.log('选择聊天:', chat)
+                    currentChat.value = chat
+                    messages.value = []
+                    try {
+                        const response = await fetch('/user-message/list', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `${token.value}`
+                            },
+                            body: JSON.stringify({
+                                receiverId: chat.senderId === userId.value ? chat.receiverId : chat.senderId,
+                                pageNo: 1,
+                                pageSize: 50
+                            })
+                        })
+                        const data = await response.json()
+                        if (data.code === 1) {
+                            messages.value = data.data.records
+                            nextTick(() => {
+                                scrollToBottom()
+                            })
+                            // 选择聊天后重新加载聊天列表以更新未读数
+                            await loadChatList()
+                        }
+                    } catch (error) {
+                        console.error('加载聊天记录失败:', error)
+                        ElMessage.error('加载聊天记录失败')
+                    }
+                }
+
+                // 修改发送消息函数
+                const sendMessage = async () => {
+                    if (!checkWebSocketConnection()) {
+                        return
+                    }
+                    
+                    console.log('发送消息:', {
+                        messageContent: messageContent.value,
+                        currentChat: currentChat.value,
+                        userId: userId.value
+                    })
+                    
+                    if (!currentChat.value) {
+                        ElMessage.warning('请先选择一个聊天')
+                        return
+                    }
+                    
+                    if (!messageContent.value.trim()) {
+                        ElMessage.warning('请输入消息内容')
+                        return
+                    }
+
+                    try {
+                        const response = await fetch('/user-message/send', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `${token.value}`
+                            },
+                            body: JSON.stringify({
+                                receiverId: currentChat.value.senderId === userId.value ? currentChat.value.receiverId : currentChat.value.senderId,
+                                content: messageContent.value
+                            })
+                        })
+                        const data = await response.json()
+                        console.log('发送消息响应:', data)
+                        if (data.code === 1) {
+                            // 添加消息到本地列表
+                            const newMessage = {
+                                id: Date.now().toString(), // 临时ID
+                                content: messageContent.value,
+                                senderId: userId.value,
+                                sendTime: new Date()
+                            }
+                            messages.value.push(newMessage)
+                            messageContent.value = ''
+                            scrollToBottom()
+                            ElMessage.success('发送成功')
+                        } else {
+                            ElMessage.error(data.msg || '发送失败')
+                        }
+                    } catch (error) {
+                        console.error('发送消息失败:', error)
+                        ElMessage.error('发送消息失败')
+                    }
+                }
+
+                // 撤回消息
+                const handleRecall = async (message, command) => {
+                    if (command === 'recall') {
+                        try {
+                            const response = await fetch('/user-message/remove', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `${token.value}`
+                                },
+                                body: JSON.stringify({
+                                    id: message.id
+                                })
+                            })
+                            const data = await response.json()
+                            if (data.code === 1) {
+                                const index = messages.value.findIndex(m => m.id === message.id)
+                                if (index !== -1) {
+                                    messages.value.splice(index, 1)
+                                }
+                                ElMessage.success('消息已撤回')
+                            } else {
+                                ElMessage.error(data.message || '撤回失败')
+                            }
+                        } catch (error) {
+                            console.error('撤回消息失败:', error)
+                            ElMessage.error('撤回消息失败')
+                        }
+                    }
+                }
+
+                // 检查消息是否可以撤回（3分钟内）
+                const canRecall = (message) => {
+                    const now = new Date()
+                    const messageTime = new Date(message.sendTime)
+                    return (now - messageTime) <= 3 * 60 * 1000
+                }
+
+                // 更新未读消息数
+                const updateUnreadCount = async (senderId) => {
+                    console.log('更新未读消息数:', senderId)
+                    try {
+                        // 重新加载聊天列表以获取最新的未读数
+                        const response = await fetch('/user-message-main/list', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `${token.value}`
+                            }
+                        })
+                        const data = await response.json()
+                        if (data.code === 1) {
+                            users.value = data.data
+                        }
+                    } catch (error) {
+                        console.error('更新未读消息数失败:', error)
+                    }
+                }
+
+                // 滚动到底部
+                const scrollToBottom = () => {
+                    if (messageContainer.value) {
+                        messageContainer.value.scrollTop = messageContainer.value.scrollHeight
+                    }
+                }
+
+                // 格式化时间
+                const formatTime = (time) => {
+                    const date = new Date(time)
+                    return date.toLocaleString()
+                }
+
+                // 退出登录
+                const handleLogout = () => {
+                    if (ws.value) {
+                        ws.value.close()
+                    }
+                    localStorage.removeItem('token')
+                    localStorage.removeItem('userId')
+                    isLoggedIn.value = false
+                    currentChat.value = null
+                    messages.value = []
+                    users.value = []
+                }
+
+                // 检查登录状态
+                onMounted(() => {
+                    const savedToken = localStorage.getItem('token')
+                    const savedUserId = localStorage.getItem('userId')
+                    if (savedToken && savedUserId) {
+                        token.value = savedToken
+                        userId.value = savedUserId
+                        isLoggedIn.value = true
+                        initWebSocket()
+                        loadChatList()
+                    }
+                })
+
+                return {
+                    isLoggedIn,
+                    loginForm,
+                    loginRules,
+                    loading,
+                    handleLogin,
+                    handleLogout,
+                    currentChat,
+                    messages,
+                    messageContent,
+                    searchUser,
+                    users,
+                    filteredUsers,
+                    selectChat,
+                    sendMessage,
+                    handleRecall,
+                    canRecall,
+                    formatTime,
+                    messageContainer,
+                    userId
+                }
+            }
+        })
+
+        // 注册Element Plus
+        app.use(ElementPlus)
+        app.mount('#app')
+    </script>
+</body>
+</html>

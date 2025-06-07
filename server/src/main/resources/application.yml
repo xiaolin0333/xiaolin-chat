@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+spring:
+  profiles:
+    active: dev
+  main:
+    allow-circular-references: true
+  datasource:
+    druid:
+      driver-class-name: ${xiaolin.datasource.driver-class-name}
+      url: jdbc:mysql://${xiaolin.datasource.host}:${xiaolin.datasource.port}/${xiaolin.datasource.database}?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true
+      username: ${xiaolin.datasource.username}
+      password: ${xiaolin.datasource.password}
+  rabbitmq:
+    host: ${xiaolin.rabbitmq.host}
+    port: ${xiaolin.rabbitmq.port}
+    username: ${xiaolin.rabbitmq.username}
+    password: ${xiaolin.rabbitmq.password}
+
+
+mybatis:
+  #mapper配置文件
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.xiaolin.entity
+  configuration:
+    #开启驼峰命名
+    map-underscore-to-camel-case: true
+
+logging:
+  level:
+    pers:
+      xiaolin:
+        mapper: debug
+        service: info
+        controller: info
+
+xiaolin:
+  jwt:
+    # 设置jwt签名加密时使用的秘钥
+    user-secret-key: xiaolin
+    # 设置jwt过期时间
+    user-ttl: 7200000000
+    # 设置前端传递过来的令牌名称
+    user-token-name: Authorization
