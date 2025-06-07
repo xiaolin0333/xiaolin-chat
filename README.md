@@ -127,6 +127,3 @@ java -jar server/target/server-1.0-SNAPSHOT.jar
    - 优化数据库查询
    - 添加消息压缩
 
-## 许可证
-
-[MIT License](LICENSE)
